@@ -10,6 +10,7 @@ import io
 import traceback # To print detailed error messages
 import logging # For better error logging
 import tempfile
+import os
 
 # --- Configuration ---
 st.set_page_config(
