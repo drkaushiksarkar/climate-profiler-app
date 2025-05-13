@@ -559,7 +559,7 @@ with tab2:
                     if clustered_df is not None:
                          st.success("Clustering complete.")
                          # Use st.map for interactive map
-                         st.map(clustered_df, latitude='lat', longitude='lon', color='cluster', size=30) # Color points by cluster
+                         st.map(clustered_df[['lat','lon']])
                          # Show cluster centers
                          with st.expander("View Cluster Centers"):
                              centers_df = pd.DataFrame(kmeans_model.cluster_centers_, columns=['Latitude', 'Longitude'])
