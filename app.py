@@ -586,136 +586,124 @@ with tab3:
 
         st.subheader("GRIB Dataset Structure")
         st.markdown("Explore the variables, coordinates, and dimensions within the GRIB file.")
-        # Use a text area to display the xarray dataset representation
         with st.expander("Show Raw Dataset Structure"):
             buffer = io.StringIO()
             climate_ds.info(buf=buffer)
             st.text(buffer.getvalue())
 
-        # Display DataFrame version if converted successfully
+        # Show tabular preview if available
         if st.session_state.get('climate_data_df') is not None:
-             st.subheader("Data as Table (Sample)")
-             st.markdown("A sample of the climate data converted into a tabular format.")
-             st.dataframe(st.session_state['climate_data_df'].head(), use_container_width=True)
-             st.caption(f"Full table shape (rows, columns): {st.session_state['climate_data_df'].shape}")
+            st.subheader("Data as Table (Sample)")
+            st.markdown("A sample of the climate data converted into a tabular format.")
+            st.dataframe(st.session_state['climate_data_df'].head(), use_container_width=True)
+            st.caption(f"Full table shape (rows, columns): {st.session_state['climate_data_df'].shape}")
         else:
-             st.info("Could not convert the GRIB dataset into a table for preview. Visualization might still be possible.")
-
+            st.info("Could not convert the GRIB dataset into a table for preview. Visualization might still be possible.")
 
         # --- Basic Visualization ---
         st.subheader("🗺️ Climate Variable Visualization")
         st.markdown("Select a variable and specific dimensions (like time or vertical level) to plot it on a map.")
 
         data_vars = list(climate_ds.data_vars)
-        coords = list(climate_ds.coords)
-        # Identify potential standard coordinates
-        lat_coord_grib = next((c for c in coords if 'lat' in c.lower()), None)
-        lon_coord_grib = next((c for c in coords if 'lon' in c.lower()), None)
-        time_coord_grib = next((c for c in ['time', 'valid_time', 'step'] if c in coords), None) # Add 'step'
-        # Common level coordinate names in GRIB
-        level_coord_grib = next((c for c in ['level', 'isobaricInhPa', 'isobaricInhpa', 'heightAboveGround', 'depthBelowLandLayer', 'hybrid'] if c in coords), None)
-
         if not data_vars:
-             st.warning("No data variables found in the GRIB file to visualize.")
+            st.warning("No data variables found in the GRIB file to visualize.")
         else:
+            # 1) Variable selector
             selected_var_grib = st.selectbox("Select Climate Variable:", data_vars, key="grib_var_select")
 
-            # Allow selection based on available coordinates
+            # 2) Inspect dims of the chosen variable
+            var = climate_ds[selected_var_grib]
+            lat_coord_grib = next((d for d in var.dims if 'lat' in d.lower()), None)
+            lon_coord_grib = next((d for d in var.dims if 'lon' in d.lower()), None)
+            time_coord_grib = next((d for d in var.dims if d in ('time','valid_time','step')), None)
+            level_coord_grib = next(
+                (d for d in var.dims
+                 if d in ('level','isobaricInhPa','isobaricInhpa',
+                          'heightAboveGround','depthBelowLandLayer','hybrid')),
+                None
+            )
+
+            # 3) Build selectors based on available dims
             selection_dict_grib = {}
-            sliders_cols = st.columns(2) # Place sliders/selectors in columns
+            sliders_cols = st.columns(2)
 
             with sliders_cols[0]:
                 if time_coord_grib:
-                     time_values = climate_ds[time_coord_grib].values
-                     # Use select_slider for discrete time steps
-                     if len(time_values) > 1:
-                         selected_time_grib = st.select_slider(f"Select Time ({time_coord_grib}):", options=time_values, value=time_values[0], key="grib_time_select")
-                         selection_dict_grib[time_coord_grib] = selected_time_grib
-                     else:
-                         st.write(f"Time ({time_coord_grib}): {time_values[0]}")
-                         selection_dict_grib[time_coord_grib] = time_values[0]
-
+                    time_values = var[time_coord_grib].values
+                    if len(time_values) > 1:
+                        selected_time = st.select_slider(
+                            f"Select Time ({time_coord_grib}):",
+                            options=time_values,
+                            value=time_values[0],
+                            key="grib_time_select"
+                        )
+                        selection_dict_grib[time_coord_grib] = selected_time
+                    else:
+                        single_time = time_values[0]
+                        st.write(f"Time ({time_coord_grib}): {single_time}")
+                        selection_dict_grib[time_coord_grib] = single_time
 
             with sliders_cols[1]:
                 if level_coord_grib:
-                     # Ensure level_values is always iterable, even if it's a single scalar
-                     raw_vals = climate_ds[level_coord_grib].values
-                     level_values = np.atleast_1d(raw_vals)
-                     if len(level_values) > 1:
-                         selected_level_grib = st.selectbox(
-                             f"Select Level ({level_coord_grib}):",
-                             options=level_values,
-                             key="grib_level_select"
-                            )
-                         selection_dict_grib[level_coord_grib] = selected_level_grib
-                     else:
-                           # Only one level ⇒ just display it
-                           single = level_values[0]
-                           st.write(f"Level ({level_coord_grib}): {single}")
-                           selection_dict_grib[level_coord_grib] = single
+                    raw_vals = var[level_coord_grib].values
+                    level_values = np.atleast_1d(raw_vals)
+                    if len(level_values) > 1:
+                        selected_level = st.selectbox(
+                            f"Select Level ({level_coord_grib}):",
+                            options=level_values,
+                            key="grib_level_select"
+                        )
+                        selection_dict_grib[level_coord_grib] = selected_level
+                    else:
+                        single_level = level_values[0]
+                        st.write(f"Level ({level_coord_grib}): {single_level}")
+                        selection_dict_grib[level_coord_grib] = single_level
 
-            # Add selectors for other dimensions if they exist (e.g., 'number' for ensemble members)
-            other_dims = [d for d in climate_ds[selected_var_grib].dims if d not in [lat_coord_grib, lon_coord_grib, time_coord_grib, level_coord_grib]]
+            # Other dims (e.g., ensemble member “number”)
+            other_dims = [d for d in var.dims
+                          if d not in (lat_coord_grib, lon_coord_grib, time_coord_grib, level_coord_grib)]
             if other_dims:
-                 st.write("Other Dimensions:")
-                 for dim in other_dims:
-                     dim_values = climate_ds[dim].values
-                     if len(dim_values) > 1:
-                         selected_dim_val = st.selectbox(f"Select {dim}:", options=dim_values, key=f"grib_other_dim_{dim}")
-                         selection_dict_grib[dim] = selected_dim_val
-                     else:
-                         st.write(f"{dim}: {dim_values[0]}")
-                         selection_dict_grib[dim] = dim_values[0]
+                st.write("Other Dimensions:")
+                for dim in other_dims:
+                    vals = var[dim].values
+                    if len(vals) > 1:
+                        sel = st.selectbox(f"Select {dim}:", options=vals, key=f"grib_other_dim_{dim}")
+                        selection_dict_grib[dim] = sel
+                    else:
+                        st.write(f"{dim}: {vals[0]}")
+                        selection_dict_grib[dim] = vals[0]
 
-
-            if selected_var_grib and lat_coord_grib and lon_coord_grib:
-                 if st.button("Generate Climate Map", key="grib_plot_button"):
+            # 4) Plot if we have lat/lon
+            if lat_coord_grib and lon_coord_grib:
+                if st.button("Generate Climate Map", key="grib_plot_button"):
                     try:
-                        # Select the data slice based on user input using the identified coordinate names
-                        data_slice = climate_ds[selected_var_grib].sel(**selection_dict_grib, method="nearest")
-
-                        # Simple plot using xarray's built-in plotting (uses matplotlib)
+                        data_slice = var.sel(**selection_dict_grib, method="nearest")
                         with st.spinner(f"Generating plot for {selected_var_grib}..."):
-                            fig_grib, ax_grib = plt.subplots(figsize=(10, 6))
-                            # Use appropriate plot type (contourf is good for gridded data)
+                            fig, ax = plt.subplots(figsize=(10, 6))
                             try:
-                                # Explicitly tell xarray which coords are x and y
-                                data_slice.plot.contourf(ax=ax_grib, x=lon_coord_grib, y=lat_coord_grib, cmap='viridis', add_colorbar=True)
-                                ax_grib.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units', '')})") # Add units if available
-                                st.pyplot(fig_grib)
-                                plt.close(fig_grib) # Close the plot
-                                logging.info(f"Generated climate map for {selected_var_grib}.")
-                            except Exception as plot_err:
-                                st.warning(f"Could not generate contour plot automatically. Trying simple plot. Error: {plot_err}")
-                                logging.warning(f"Contour plot failed for {selected_var_grib}", exc_info=True)
-                                # Fallback or alternative plot
-                                try:
-                                    fig_grib_simple, ax_grib_simple = plt.subplots(figsize=(10, 6))
-                                    data_slice.plot(ax=ax_grib_simple, x=lon_coord_grib, y=lat_coord_grib)
-                                    ax_grib_simple.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units', '')}) - Simple Plot")
-                                    st.pyplot(fig_grib_simple)
-                                    plt.close(fig_grib_simple)
-                                    logging.info(f"Generated simple climate map for {selected_var_grib}.")
-                                except Exception as simple_plot_err:
-                                    st.error(f"Failed to generate any plot for the selected slice. Error: {simple_plot_err}")
-                                    logging.error(f"Simple plot failed for {selected_var_grib}", exc_info=True)
-                                    with st.expander("Show Data Slice Details"):
-                                        st.write(data_slice)
-
+                                data_slice.plot.contourf(
+                                    ax=ax,
+                                    x=lon_coord_grib,
+                                    y=lat_coord_grib,
+                                    cmap='viridis',
+                                    add_colorbar=True
+                                )
+                                ax.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units','')})")
+                            except Exception:
+                                ax.clear()
+                                data_slice.plot(ax=ax, x=lon_coord_grib, y=lat_coord_grib)
+                                ax.set_title(f"{selected_var_grib} (simple plot)")
+                            st.pyplot(fig)
+                            plt.close(fig)
                     except Exception as e:
-                         st.error(f"Error preparing climate data slice for {selected_var_grib}: {e}")
-                         logging.error(f"Error selecting/plotting GRIB slice for {selected_var_grib}", exc_info=True)
-                         # st.error(traceback.format_exc())
-            elif not (lat_coord_grib and lon_coord_grib):
-                 st.warning("Could not identify standard latitude and longitude coordinates in the GRIB file required for plotting.")
-                 st.write(f"Available coordinates: {coords}")
-
+                        st.error(f"Error preparing climate data slice: {e}")
+            else:
+                st.warning("Could not identify latitude/longitude dims for plotting.")
 
     elif uploaded_climate_file:
-        st.warning("Climate data (GRIB) could not be loaded. Please check the file, error messages, and ensure 'eccodes'/'cfgrib' are installed correctly (see README).")
+        st.warning("Climate data (GRIB) could not be loaded. Please check the file and ensure dependencies are installed.")
     else:
         st.info("Upload a climate data file (GRIB) in the sidebar to begin analysis.")
-
 
 # --- Integration Suggestions Tab ---
 with tab4:
