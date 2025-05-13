@@ -659,14 +659,18 @@ with tab3:
                         selection_dict_grib[level_coord_grib] = single_level
 
             # Other dims (e.g., ensemble member “number”)
-            other_dims = [d for d in var.dims
-                          if d not in (lat_coord_grib, lon_coord_grib, time_coord_grib, level_coord_grib)]
+            other_dims = [
+                d for d in var.dims
+                if d not in (lat_coord_grib, lon_coord_grib, time_coord_grib, level_coord_grib)
+            ]
             if other_dims:
                 st.write("Other Dimensions:")
                 for dim in other_dims:
                     vals = var[dim].values
                     if len(vals) > 1:
-                        sel = st.selectbox(f"Select {dim}:", options=vals, key=f"grib_other_dim_{dim}")
+                        sel = st.selectbox(
+                            f"Select {dim}:", options=vals, key=f"grib_other_dim_{dim}"
+                        )
                         selection_dict_grib[dim] = sel
                     else:
                         st.write(f"{dim}: {vals[0]}")
@@ -675,15 +679,14 @@ with tab3:
             # 4) Plot if we have lat/lon
             if lat_coord_grib and lon_coord_grib:
                 if st.button("Generate Climate Map", key="grib_plot_button"):
-                    try:
-                        data_slice = var.sel(**selection_dict_grib, method="nearest")
-                        # Ensure numeric dtype for plotting
+                    with st.spinner(f"Generating plot for {selected_var_grib}..."):
                         try:
+                            data_slice = var.sel(**selection_dict_grib, method="nearest")
+                            # Cast to float so plotting functions see numeric data
                             data_slice = data_slice.astype(float)
-                        except Exception:
-                            pass
-                        with st.spinner(f"Generating plot for {selected_var_grib}..."):
+
                             fig, ax = plt.subplots(figsize=(10, 6))
+                            # First try a contourf; fallback to simple plot
                             try:
                                 data_slice.plot.contourf(
                                     ax=ax,
@@ -694,19 +697,27 @@ with tab3:
                                 )
                             except Exception:
                                 ax.clear()
-                                data_slice.plot(ax=ax, x=lon_coord_grib, y=lat_coord_grib)
+                                data_slice.plot(
+                                    ax=ax, x=lon_coord_grib, y=lat_coord_grib
+                                )
+
                             ax.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units','')})")
                             st.pyplot(fig)
                             plt.close(fig)
-                    except Exception as e:
-                        st.error(f"Error preparing climate data slice: {e}")
+                        except Exception as e:
+                            st.error(f"Could not plot selected data slice: {e}")
+                            st.write("Raw data slice for inspection:")
+                            st.write(data_slice)
             else:
                 st.warning("Could not identify latitude/longitude dims for plotting.")
 
     elif uploaded_climate_file:
-        st.warning("Climate data (GRIB) could not be loaded. Please check the file and ensure dependencies are installed.")
+        st.warning(
+            "Climate data (GRIB) could not be loaded. Please check the file and ensure dependencies are installed."
+        )
     else:
         st.info("Upload a climate data file (GRIB) in the sidebar to begin analysis.")
+
 # --- Integration Suggestions Tab ---
 with tab4:
     st.header("🔗 Integration Suggestions")
