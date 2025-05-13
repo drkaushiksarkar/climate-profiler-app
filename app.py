@@ -74,7 +74,7 @@ def load_climate_data(uploaded_file):
         with tempfile.NamedTemporaryFile(suffix=".grib") as tmp:
             tmp.write(uploaded_file.getvalue())
             tmp.flush()
-            ds = xr.open_dataset(tmp.name, engine='cfgrib', chunks={})
+            ds = xr.open_dataset(tmp.name, engine='cfgrib')
 
         logging.info(f"Successfully loaded GRIB file: {uploaded_file.name}")
         return ds
