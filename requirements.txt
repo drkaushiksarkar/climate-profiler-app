@@ -20,4 +20,4 @@ matplotlib >= 3.6.0 # For plotting (used by xarray, statsmodels)
 # Input/Output helpers (Standard library)
 # io
 # traceback
-# logging
+# loggingsetuptools>=59.0.0
