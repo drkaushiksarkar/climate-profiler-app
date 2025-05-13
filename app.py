@@ -69,36 +69,36 @@ def load_climate_data(uploaded_file):
         xarray.Dataset or None: The loaded Xarray Dataset, or None if loading fails.
     """
     try:
-        # write the uploaded bytes to a temporary .grib file,
-        # because cfgrib needs a real filename
-        with tempfile.NamedTemporaryFile(suffix=".grib") as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp.flush()
-            ds = xr.open_dataset(tmp.name, engine='cfgrib')
+        # Create a temp file that will NOT auto-delete
+        fd, tmp_path = tempfile.mkstemp(suffix=".grib")
+        # Write the uploaded bytes
+        with os.fdopen(fd, "wb") as f:
+            f.write(uploaded_file.getvalue())
 
+        # Now open_dataset from that file; it will still exist later
+        ds = xr.open_dataset(tmp_path, engine="cfgrib")
         logging.info(f"Successfully loaded GRIB file: {uploaded_file.name}")
         return ds
+
     except ValueError as ve:
-         # Common error if eccodes/cfgrib is not set up correctly or file is not GRIB
-         st.error(f"Error loading GRIB data from '{uploaded_file.name}'. Is the file a valid GRIB file?")
-         st.error(f"Details: {ve}")
-         st.warning("Ensure the 'eccodes' library is correctly installed (preferably via Conda) and accessible in your environment.")
-         logging.error(f"ValueError loading GRIB: {ve}", exc_info=True)
-         # st.error(traceback.format_exc())
-         return None
-    except FileNotFoundError:
-        # This can happen if eccodes itself is missing
-        st.error("Error loading GRIB: `eccodes` library might be missing or not found.")
-        st.warning("Please ensure 'eccodes' is installed correctly, preferably using Conda: `conda install -c conda-forge eccodes`")
-        logging.error("FileNotFoundError loading GRIB (likely missing eccodes)", exc_info=True)
-        return None
-    except Exception as e:
-        st.error(f"An unexpected error occurred loading GRIB data from '{uploaded_file.name}': {e}")
-        st.warning("Ensure 'eccodes' and 'cfgrib' are correctly installed (Conda recommended).")
-        logging.error(f"Unexpected error loading GRIB: {e}", exc_info=True)
-        # st.error(traceback.format_exc())
+        st.error(f"Error loading GRIB data from '{uploaded_file.name}'. Is it a valid GRIB?")
+        st.error(f"Details: {ve}")
+        st.warning("Ensure 'eccodes' and 'cfgrib' are installed correctly.")
+        logging.error(f"ValueError loading GRIB: {ve}", exc_info=True)
         return None
 
+    except FileNotFoundError:
+        st.error("Error loading GRIB: `eccodes` library might be missing.")
+        st.warning("Install via Conda: `conda install -c conda-forge eccodes`")
+        logging.error("FileNotFoundError loading GRIB", exc_info=True)
+        return None
+
+    except Exception as e:
+        st.error(f"Unexpected error loading GRIB from '{uploaded_file.name}': {e}")
+        st.warning("Ensure 'eccodes' and 'cfgrib' are installed correctly.")
+        logging.error(f"Unexpected error loading GRIB: {e}", exc_info=True)
+        return None
+    
 def identify_potential_columns(df):
     """
     Identifies potential spatial (latitude, longitude) and temporal columns
