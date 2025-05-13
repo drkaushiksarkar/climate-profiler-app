@@ -1,4 +1,5 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
 import xarray as xr
 from ydata_profiling import ProfileReport
@@ -637,13 +638,21 @@ with tab3:
 
             with sliders_cols[1]:
                 if level_coord_grib:
-                     level_values = climate_ds[level_coord_grib].values
+                     # Ensure level_values is always iterable, even if it's a single scalar
+                     raw_vals = climate_ds[level_coord_grib].values
+                     level_values = np.atleast_1d(raw_vals)
                      if len(level_values) > 1:
-                         selected_level_grib = st.selectbox(f"Select Level ({level_coord_grib}):", options=level_values, key="grib_level_select")
+                         selected_level_grib = st.selectbox(
+                             f"Select Level ({level_coord_grib}):",
+                             options=level_values,
+                             key="grib_level_select"
+                            )
                          selection_dict_grib[level_coord_grib] = selected_level_grib
                      else:
-                          st.write(f"Level ({level_coord_grib}): {level_values[0]}")
-                          selection_dict_grib[level_coord_grib] = level_values[0]
+                           # Only one level ⇒ just display it
+                           single = level_values[0]
+                           st.write(f"Level ({level_coord_grib}): {single}")
+                           selection_dict_grib[level_coord_grib] = single
 
             # Add selectors for other dimensions if they exist (e.g., 'number' for ensemble members)
             other_dims = [d for d in climate_ds[selected_var_grib].dims if d not in [lat_coord_grib, lon_coord_grib, time_coord_grib, level_coord_grib]]
