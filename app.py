@@ -576,7 +576,6 @@ with tab2:
     else:
         st.info("Upload a health data file (CSV or Excel) in the sidebar to begin analysis.")
 
-
 # --- Climate Data Analysis Tab ---
 with tab3:
     st.header("🌡️ Climate Data Analysis")
@@ -678,6 +677,11 @@ with tab3:
                 if st.button("Generate Climate Map", key="grib_plot_button"):
                     try:
                         data_slice = var.sel(**selection_dict_grib, method="nearest")
+                        # Ensure numeric dtype for plotting
+                        try:
+                            data_slice = data_slice.astype(float)
+                        except Exception:
+                            pass
                         with st.spinner(f"Generating plot for {selected_var_grib}..."):
                             fig, ax = plt.subplots(figsize=(10, 6))
                             try:
@@ -688,11 +692,10 @@ with tab3:
                                     cmap='viridis',
                                     add_colorbar=True
                                 )
-                                ax.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units','')})")
                             except Exception:
                                 ax.clear()
                                 data_slice.plot(ax=ax, x=lon_coord_grib, y=lat_coord_grib)
-                                ax.set_title(f"{selected_var_grib} (simple plot)")
+                            ax.set_title(f"{selected_var_grib} ({data_slice.attrs.get('units','')})")
                             st.pyplot(fig)
                             plt.close(fig)
                     except Exception as e:
@@ -704,7 +707,6 @@ with tab3:
         st.warning("Climate data (GRIB) could not be loaded. Please check the file and ensure dependencies are installed.")
     else:
         st.info("Upload a climate data file (GRIB) in the sidebar to begin analysis.")
-
 # --- Integration Suggestions Tab ---
 with tab4:
     st.header("🔗 Integration Suggestions")
