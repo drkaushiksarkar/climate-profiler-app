@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import io
 import traceback # To print detailed error messages
 import logging # For better error logging
+import tempfile
 
 # --- Configuration ---
 st.set_page_config(
@@ -68,14 +69,13 @@ def load_climate_data(uploaded_file):
         xarray.Dataset or None: The loaded Xarray Dataset, or None if loading fails.
     """
     try:
-        # cfgrib works best with file paths or file-like objects supporting seek/tell.
-        # Read the uploaded file's content into a BytesIO object.
-        file_bytes = io.BytesIO(uploaded_file.getvalue())
+        # write the uploaded bytes to a temporary .grib file,
+        # because cfgrib needs a real filename
+        with tempfile.NamedTemporaryFile(suffix=".grib") as tmp:
+            tmp.write(uploaded_file.getvalue())
+            tmp.flush()
+            ds = xr.open_dataset(tmp.name, engine='cfgrib', chunks={})
 
-        # Use chunks={} to avoid Dask arrays for simpler processing in this app.
-        # The engine='cfgrib' is essential.
-        # Need backend_kwargs for filtering specific messages if needed, but not essential now.
-        ds = xr.open_dataset(file_bytes, engine='cfgrib', chunks={})
         logging.info(f"Successfully loaded GRIB file: {uploaded_file.name}")
         return ds
     except ValueError as ve:
