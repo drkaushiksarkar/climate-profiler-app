@@ -21,3 +21,4 @@ matplotlib >= 3.6.0 # For plotting (used by xarray, statsmodels)
 # io
 # traceback
 # loggingsetuptools>=59.0.0
+setuptools>=60.0.0
