@@ -1,41 +1,23 @@
-# Use an official Miniconda3 image as a base
-FROM continuumio/miniconda3:4.12.0
+FROM node:20-alpine AS builder
 
-# Install Debian build-essential (gcc/g++) so pip can compile wheels like phik & wordcloud
-RUN apt-get update \
- && apt-get install -y build-essential \
- && rm -rf /var/lib/apt/lists/*
-
-# Set the working directory inside the container
 WORKDIR /app
+COPY package*.json tsconfig.json ./
+RUN npm ci --ignore-scripts
+COPY src/ src/
+RUN npm run build
 
-# --- Create conda env & install native deps (eccodes, cfgrib, etc.) ---
-RUN conda create -n climhealth python=3.10 -y && \
-    echo "conda activate climhealth" >> ~/.bashrc && \
-    conda install -n climhealth -c conda-forge \
-        cmake eccodes cfgrib xarray \
-    -y && \
-    conda clean -afy
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
 
-# --- Install Python dependencies via pip ---
-# Copy the requirements file first (leverages Docker layer cache)
-COPY requirements.txt .
+RUN adduser -D appuser
+COPY --from=builder /app/dist dist/
+COPY --from=builder /app/node_modules node_modules/
+COPY package*.json ./
 
-# Use the pip inside our conda env to install everything, now that gcc/g++ exist
-RUN /opt/conda/envs/climhealth/bin/pip install --no-cache-dir -r requirements.txt
+USER appuser
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1
 
-# --- Copy Application Code ---
-COPY app.py .
-# (Uncomment if you have other modules/folders to include)
-# COPY utils/ ./utils/
-
-# --- Expose Port ---
-EXPOSE 8501
-
-# --- Entrypoint ---
-CMD ["/opt/conda/envs/climhealth/bin/streamlit", "run", "app.py", \
-     "--server.port=8501", "--server.address=0.0.0.0"]
-
-# --- Metadata ---
-LABEL maintainer="Your Name <your.email@example.com>"
-LABEL description="Streamlit app for Climate & Health Data Profiling"
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
